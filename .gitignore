@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.*
+*.log
+
+# User-specific saved configs (created at runtime by prompt-config.sh)
+.openclaw-tune-codex-plus/
+out/
+
+# Editors
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

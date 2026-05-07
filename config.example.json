@@ -1,0 +1,26 @@
+{
+  "remote": {
+    "host": "root@your.server.example",
+    "container": "openclaw"
+  },
+  "owner": {
+    "name": "Alex",
+    "telegramId": 123456789,
+    "timezone": "Europe/Berlin",
+    "language": "en"
+  },
+  "bot": {
+    "name": "Buddy",
+    "characterBlurb": "Pragmatic, dry humor, concise."
+  },
+  "limits": {
+    "heartbeatEvery": "6h"
+  },
+  "providers": {
+    "geminiApiKeyEnv": "GEMINI_API_KEY"
+  },
+  "options": {
+    "installLimitsCommand": true,
+    "dryRun": false
+  }
+}
