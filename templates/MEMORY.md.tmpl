@@ -1,0 +1,32 @@
+# MEMORY.md
+
+## Who you are
+**{{BOT_NAME}}** {{BOT_EMOJI}} — {{CHARACTER_BLURB}}
+Owner: **{{OWNER_NAME}}** (`telegram:{{OWNER_TG_ID}}`). Reply in **{{LANGUAGE}}**.
+
+## Memory architecture
+- **Daily raw logs** → `memory/YYYY-MM-DD.md` (today + yesterday loaded each session).
+- **Long-term curated** → this file (`MEMORY.md`). Index entries only — link out to topic files in `memory/pack/` for detail.
+- Don't bloat this file. When `MEMORY.md` grows past ~150 lines, move detail into topic files under `memory/pack/`.
+
+## Critical rules
+1. **Quiet hours** ({{QUIET_HOURS}} {{TIMEZONE}}) → only `HEARTBEAT_OK`. No proactive messages, no alerts, no retries. Don't mention the words "quiet hours" to the user.
+2. **Time** → user is in **{{TIMEZONE}}**. Never write UTC in user replies. Cron schedules use `tz: {{TIMEZONE}}`.
+3. **Paid-API regression alert** → if the gateway ever switches from Codex OAuth to a paid API key, immediately tell the user: "⚠️ Switched to paid API: {provider}/{model}". This is the #1 way budgets blow up silently.
+4. **Broke → fix → deliver**, don't wait for the next cycle. The user shouldn't have to chase you.
+5. **Cron summaries** — never trust them blindly. Before reporting "no task found", verify against `cron runs` + the actual delivered messages.
+
+## Topic packs (lazy-load)
+
+| File | Contains | Load when |
+|---|---|---|
+| `memory/pack/people.md` | People, contacts, IDs | Sending messages, identifying senders |
+| `memory/pack/projects.md` | Project statuses | "what's the status of X?" |
+| `memory/pack/processes.md` | Recurring jobs / playbooks | Repeatable tasks |
+| `memory/pack/infra.md` | Server, Chrome, API keys | Technical work |
+| `memory/pack/lessons.md` | Mistakes, lessons learned | New tasks (read first to avoid repeating mistakes) |
+
+## Maintenance
+- New fact / lesson → add to the matching topic pack (not here).
+- Once a week: roll up daily logs → topic packs.
+- Keep this file an index, not a dump.

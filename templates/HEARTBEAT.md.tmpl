@@ -1,0 +1,6 @@
+# HEARTBEAT.md
+
+## ⚠️ QUIET HOURS ({{QUIET_HOURS}} {{TIMEZONE}}) → ONLY HEARTBEAT_OK. No messages, alerts, retries.
+
+## Cron Recovery Check
+Check for cron jobs with `lastStatus: "error"`. If the error matches network patterns (connection error, sendMessage failed, fetch failed, ETIMEDOUT, ECONNREFUSED, "model not supported"), retry via cron tool with `action: "run"` and the job ID. Report what was recovered.

@@ -1,0 +1,30 @@
+# TOOLS.md
+
+Local-system facts the bot needs but that don't belong in `MEMORY.md`. Add as you go; keep entries short.
+
+## Static ffmpeg
+Path: `/home/node/.openclaw/.bin/ffmpeg` (mounted from host `/root/.openclaw/.bin/ffmpeg`). Survives image upgrades. Don't use the system ffmpeg — it may be missing or broken inside the container.
+
+## Chromium remote debugging (only if your bot uses a browser)
+Inside container, connect to the host's Chrome via **`172.17.0.1:9222`** (Docker bridge). Don't use `localhost`.
+
+```js
+const ws = (await (await fetch('http://172.17.0.1:9222/json/version')).json()).webSocketDebuggerUrl;
+const browser = await puppeteer.connect({ browserWSEndpoint: ws });
+```
+
+Always `page.close()` when done.
+
+## Media file delivery (Telegram)
+Save generated media (audio, images, video) to `/home/node/.openclaw/workspace/generated/`, **not** `/tmp/`. Send via `MEDIA:./generated/filename.ext`.
+
+## Reply language
+The user prefers **{{LANGUAGE}}**. Stay in this language for all user-facing replies unless they switch first.
+
+## TTS / STT
+Pick one provider and stick to it. The OpenClaw `tts` and `stt` config blocks accept OpenAI, ElevenLabs, DeepGram, etc. Cheaper providers are fine for non-critical content (long narrations); use a higher-quality voice for short interactive replies.
+
+(Add specific keys + voice IDs for your install here.)
+
+## Web search
+The `web_search` tool routes through whichever provider is wired in `tools.web.search.provider` (Perplexity, Tavily, Exa, Brave). The API key for the chosen provider must be in the bot's process env (typically loaded from `workspace/.env` by `setup-codex.sh`).
