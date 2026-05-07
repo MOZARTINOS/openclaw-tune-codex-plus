@@ -4,20 +4,20 @@
 #   timestamp matches a directory at /root/openclaw-tune-backup-<ts>/
 
 set -euo pipefail
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=lib.sh
+source "$SCRIPT_DIR/lib.sh"
 
-CONFIG="${1:?Usage: rollback.sh <config.json> <timestamp>}"
+require_bins jq
+load_config "${1:?Usage: rollback.sh <config.json> <timestamp>}"
 TS="${2:?Usage: rollback.sh <config.json> <timestamp>}"
+validate_timestamp "$TS"
 
-REMOTE=$(jq -r '.remote.host // ""' "$CONFIG")
-CONTAINER=$(jq -r '.remote.container // "openclaw"' "$CONFIG")
+CONTAINER_Q=$(printf %q "$CONTAINER")
 BACKUP_DIR="/root/openclaw-tune-backup-$TS"
+BACKUP_DIR_Q=$(printf %q "$BACKUP_DIR")
 
-ssh_exec() {
-    if [ -z "$REMOTE" ]; then bash -c "$*"
-    else ssh "$REMOTE" "$@"; fi
-}
-
-if ! ssh_exec "test -d '$BACKUP_DIR'"; then
+if ! ssh_exec "test -d $BACKUP_DIR_Q && echo ok" 2>/dev/null | grep -q ok; then
     echo "ERROR: backup not found at $BACKUP_DIR" >&2
     echo "Available backups:" >&2
     ssh_exec "ls -1d /root/openclaw-tune-backup-* 2>/dev/null" >&2 || true
@@ -25,13 +25,22 @@ if ! ssh_exec "test -d '$BACKUP_DIR'"; then
 fi
 
 echo "[rollback] restoring from $BACKUP_DIR"
-ssh_exec "cp '$BACKUP_DIR/openclaw.json' /root/.openclaw/openclaw.json && \
-    rm -rf /root/.openclaw/workspace && cp -r '$BACKUP_DIR/workspace' /root/.openclaw/workspace && \
-    rm -rf /root/.openclaw/.codex && cp -r '$BACKUP_DIR/.codex' /root/.openclaw/.codex && \
-    chown -R 1000:1000 /root/.openclaw/openclaw.json /root/.openclaw/workspace /root/.openclaw/.codex"
+# Restore everything deploy.sh writes: openclaw.json, workspace, .codex, harness-auth, acp-auth.
+ssh_exec "set -e; \
+    cp -- $BACKUP_DIR_Q/openclaw.json /root/.openclaw/openclaw.json && \
+    rm -rf /root/.openclaw/workspace && cp -a -- $BACKUP_DIR_Q/workspace /root/.openclaw/workspace && \
+    rm -rf /root/.openclaw/.codex && cp -a -- $BACKUP_DIR_Q/.codex /root/.openclaw/.codex && \
+    if [ -d $BACKUP_DIR_Q/harness-auth ]; then \
+        rm -rf /root/.openclaw/agents/main/agent/harness-auth && \
+        cp -a -- $BACKUP_DIR_Q/harness-auth /root/.openclaw/agents/main/agent/harness-auth; fi && \
+    if [ -d $BACKUP_DIR_Q/acp-auth ]; then \
+        rm -rf /root/.openclaw/agents/main/agent/acp-auth && \
+        cp -a -- $BACKUP_DIR_Q/acp-auth /root/.openclaw/agents/main/agent/acp-auth; fi && \
+    chown -R 1000:1000 /root/.openclaw/openclaw.json /root/.openclaw/workspace /root/.openclaw/.codex \
+        /root/.openclaw/agents/main/agent/harness-auth /root/.openclaw/agents/main/agent/acp-auth 2>/dev/null || true"
 
 echo "[rollback] restarting container"
-ssh_exec "docker restart $CONTAINER >/dev/null"
+ssh_exec "docker restart $CONTAINER_Q >/dev/null"
 sleep 15
 
 echo "[rollback] DONE — pre-tune state restored. Backup dir kept at $BACKUP_DIR (delete manually if not needed)."

@@ -15,7 +15,7 @@ Out of the box, an OpenClaw bot on ChatGPT Plus burns through the weekly Codex q
 
 ## What this does
 
-- Trims bootstrap to ≤12 KB total (≤3k tokens), keeping engine constraints satisfied
+- Trims bootstrap to ~10 KB across 7 files (engine limits: 12 KB per file, 60 KB total — we stay well under both)
 - Sets `agents.defaults.heartbeat.every = "6h"`
 - Pins Codex CLI to `forced_login_method = "chatgpt"`, `sandbox_mode = "danger-full-access"`, `approval_policy = "never"`
 - Removes paid OpenAI fallback, keeps Gemini as a free safety net
@@ -42,6 +42,20 @@ cd openclaw-tune-codex-plus
 ```
 
 The installer asks you 7 questions (SSH target, owner Telegram ID, timezone, bot name, …), saves your answers, then patches the remote bot. Re-running re-uses the saved answers — no prompts.
+
+## Security model — read this before running
+
+This tuner installs Codex CLI configs with **`sandbox_mode = "danger-full-access"`** and **`approval_policy = "never"`**. That's required because Codex CLI's `workspace-write` mode uses bwrap (Linux user namespaces), which fails inside non-privileged Docker. The trade-off: **whatever your bot can be talked into doing, it can do** — read any file inside the container, run any shell command, hit any host network reachable from the container.
+
+In practice the **container is the security boundary**. The bot cannot escape Docker, but it can:
+
+- Read every file under `/home/node/.openclaw/` (your bootstrap, memory, auth tokens, API keys in `.env`).
+- Run arbitrary commands inside the container.
+- Reach any network endpoint the container can route to (your LAN if bridged, the open internet, etc.).
+
+So: **lock the Telegram allowlist tightly** (this tuner sets `dmPolicy: "allowlist"` and `groupPolicy: "disabled"` automatically), don't put long-lived credentials on the host that you wouldn't trust your bot with, and don't expose the container to the internet beyond Telegram.
+
+If your threat model can't tolerate this, don't use this tool — pick a different sandbox or run OpenClaw in a privileged-but-isolated VM.
 
 ## Requirements
 

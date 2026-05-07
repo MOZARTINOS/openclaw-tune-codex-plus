@@ -1,0 +1,8 @@
+# Force LF line endings on shell/JS scripts so Linux servers can execute them
+# regardless of the OS where the repo was cloned.
+*.sh   text eol=lf
+*.mjs  text eol=lf
+*.js   text eol=lf
+*.toml text eol=lf
+*.md   text eol=lf
+*.json text eol=lf

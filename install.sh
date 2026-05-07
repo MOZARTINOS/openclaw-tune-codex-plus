@@ -12,6 +12,11 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "$SCRIPT_DIR"
 
+# Local dependency gate before we run any other helper.
+for bin in jq node bash; do
+    command -v "$bin" >/dev/null 2>&1 || { echo "ERROR: missing local dep: $bin" >&2; exit 1; }
+done
+
 CONFIG=""
 DRY_RUN=0
 ROLLBACK_TS=""

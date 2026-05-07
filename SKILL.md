@@ -41,63 +41,47 @@ Optional: `GEMINI_API_KEY` env var (skill prompts if absent).
 
 ## Workflow
 
+All scripts take **a single argument**: the path to a `config.json` produced by `scripts/prompt-config.sh`. SSH target, container name, and owner data live in that file.
+
 ### Phase 0 — Preflight
 
 ```bash
-./scripts/preflight.sh "$REMOTE" "$CONTAINER"
+./scripts/preflight.sh ./config.json
 ```
 
-Verifies: container running, image is OpenClaw `≥2026.4.22`, `auth_mode=chatgpt`, `OPENAI_API_KEY` not in container env, Codex CLI `≥0.124.0`. Exits non-zero with a fix list on any blocker.
+Verifies: local deps, SSH reach, container running, OpenClaw `≥2026.4.22`, `auth_mode=chatgpt`, `OPENAI_API_KEY` not in container env, Codex CLI `≥0.124.0`. Exits non-zero with a fix list on any blocker.
 
-### Phase 1 — Backup
-
-```bash
-ssh "$REMOTE" "mkdir -p /root/openclaw-tune-backup-\$(date +%Y%m%d-%H%M%S) && \
-  cp -r /root/.openclaw/{openclaw.json,workspace,.codex} \
-     /root/openclaw-tune-backup-\$(date +%Y%m%d-%H%M%S)/"
-```
-
-### Phase 2 — Render bootstrap locally
+### Phase 1 — Render bootstrap locally
 
 ```bash
-node scripts/render-bootstrap.mjs config.json out/
+node scripts/render-bootstrap.mjs ./config.json out/
 ```
 
 Substitutes `{{VARS}}` in `templates/*.tmpl`, asserts each file ≤12 KB and total ≤60 KB. Fails locally if templates can't fit; never breaks the remote.
 
-### Phase 3 — Patch openclaw.json (deep-merge)
+### Phase 2 — Deploy (handles backup + patch + restart)
 
 ```bash
-ssh "$REMOTE" "cat /root/.openclaw/openclaw.json" | \
-  node scripts/patch-openclaw-json.mjs config.json | \
-  ssh "$REMOTE" "cat > /root/.openclaw/openclaw.json.new"
+./scripts/deploy.sh ./config.json out/
 ```
 
-Deep-merges the budget block (model.primary, fallbacks, heartbeat=6h, tools.profile/allow/deny, channels.telegram allowlist, removes anthropic provider). Preserves any unrelated keys the user has set.
+Backs up `openclaw.json` + `workspace/` + `.codex/` + `harness-auth/` + `acp-auth/` to `/root/openclaw-tune-backup-<ts>/`, scp's the staged tarball, unpacks, chowns to `1000:1000`, drops `codex-config.toml` into all account dirs, atomically swaps in the patched `openclaw.json` (deep-merged via `patch-openclaw-json.mjs`), restarts the container.
 
-### Phase 4 — Deploy
+### Phase 3 — Verify
 
 ```bash
-./scripts/deploy.sh "$REMOTE" "$CONTAINER" out/
+./scripts/verify.sh ./config.json
 ```
 
-Tars staged bootstrap + Codex configs (3 paths) + `chatgpt_limits.js`, scp's, unpacks, chowns to `1000:1000`, swaps `openclaw.json.new`, restarts container.
-
-### Phase 5 — Verify
-
-```bash
-./scripts/verify.sh "$REMOTE" "$CONTAINER"
-```
-
-Re-checks `auth_mode`, runs `/limits` probe, byte-counts bootstrap. Refuses success if `auth_mode != chatgpt` (Codex CLI may have flipped to apikey on restart — that's a known regression).
+Re-checks `auth_mode`, runs `/limits` probe, byte-counts bootstrap, confirms `tools.allow` and `channels.telegram.allowFrom`. Refuses success if anything regressed (e.g. `auth_mode` flipped to apikey on restart).
 
 ### Rollback
 
 ```bash
-./scripts/rollback.sh "$REMOTE" <timestamp>
+./scripts/rollback.sh ./config.json <timestamp>
 ```
 
-Restores from `/root/openclaw-tune-backup-<ts>/`, restarts container.
+Restores `openclaw.json` + `workspace/` + `.codex/` + `harness-auth/` + `acp-auth/` from `/root/openclaw-tune-backup-<ts>/`, restarts container.
 
 ## Reference deployment
 

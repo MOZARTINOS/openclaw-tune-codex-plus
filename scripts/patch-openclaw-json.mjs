@@ -37,7 +37,17 @@ out.agents = out.agents ?? {};
 out.agents.defaults = out.agents.defaults ?? {};
 out.agents.defaults.model = out.agents.defaults.model ?? {};
 out.agents.defaults.model.primary = 'openai-codex/gpt-5.5';
-out.agents.defaults.model.fallbacks = ['google/gemini-3.1-pro-preview'];
+
+// Fallback merge: drop paid/blocked, ensure Gemini is present, preserve other custom fallbacks.
+const BLOCKED_FALLBACK_PREFIXES = ['anthropic/', 'openai/gpt-4o-mini'];
+const REQUIRED_FALLBACK = 'google/gemini-3.1-pro-preview';
+const existingFallbacks = Array.isArray(out.agents.defaults.model.fallbacks)
+    ? out.agents.defaults.model.fallbacks.filter(
+          (m) => typeof m === 'string' && !BLOCKED_FALLBACK_PREFIXES.some((p) => m.startsWith(p))
+      )
+    : [];
+if (!existingFallbacks.includes(REQUIRED_FALLBACK)) existingFallbacks.unshift(REQUIRED_FALLBACK);
+out.agents.defaults.model.fallbacks = existingFallbacks;
 
 out.agents.defaults.heartbeat = out.agents.defaults.heartbeat ?? {};
 out.agents.defaults.heartbeat.every = cfg.limits?.heartbeatEvery || '6h';
@@ -61,17 +71,29 @@ tg.enabled = true;
 tg.dmPolicy = 'allowlist';
 tg.groupPolicy = 'disabled';
 const ownerId = Number(cfg.owner.telegramId);
+if (!Number.isInteger(ownerId)) {
+    console.error(`ERROR: owner.telegramId is not an integer: ${cfg.owner.telegramId}`);
+    process.exit(2);
+}
+// Preserve only entries that are already valid integers; reject and warn on garbage.
 const existingAllowFrom = Array.isArray(tg.allowFrom) ? tg.allowFrom : [];
-tg.allowFrom = Array.from(new Set([...existingAllowFrom.map(Number), ownerId]));
+const cleanedAllowFrom = [];
+for (const v of existingAllowFrom) {
+    if (Number.isInteger(v)) {
+        cleanedAllowFrom.push(v);
+    } else if (typeof v === 'string' && /^-?\d+$/.test(v.trim())) {
+        cleanedAllowFrom.push(Number(v));
+    } else {
+        console.error(`  warning: dropping non-numeric allowFrom entry: ${JSON.stringify(v)}`);
+    }
+}
+if (!cleanedAllowFrom.includes(ownerId)) cleanedAllowFrom.push(ownerId);
+// Stable order: deduplicate while preserving insertion order.
+tg.allowFrom = [...new Set(cleanedAllowFrom)];
 
-// Remove anthropic from providers list (if present) and from any fallback chains.
+// Remove anthropic from providers list (fallbacks already handled above).
 if (out.models?.providers && typeof out.models.providers === 'object') {
     delete out.models.providers.anthropic;
-}
-if (Array.isArray(out.agents?.defaults?.model?.fallbacks)) {
-    out.agents.defaults.model.fallbacks = out.agents.defaults.model.fallbacks.filter(
-        (m) => !String(m).startsWith('anthropic/') && !String(m).startsWith('openai/gpt-4o-mini')
-    );
 }
 
 // --- Diff summary on stderr (so stdout stays clean for piping) ---

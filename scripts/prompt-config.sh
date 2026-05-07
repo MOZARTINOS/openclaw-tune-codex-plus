@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# Interactive prompts → writes config.json with all fields the other scripts need.
-# If a config file is passed as $1 and exists, this is a no-op (just validates and exits).
-#
+# Interactive prompts → writes config.json. With --reuse, validates an existing config.
 # Usage:
-#   ./prompt-config.sh                         # writes ./config.json
+#   ./prompt-config.sh                         # writes ./config.json (interactive)
 #   ./prompt-config.sh ~/my-bots/alex.json     # writes to that path
-#   ./prompt-config.sh --reuse alex.json       # uses existing config without prompts (validate only)
+#   ./prompt-config.sh --reuse alex.json       # uses existing config (validate only)
 
 set -euo pipefail
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=lib.sh
+source "$SCRIPT_DIR/lib.sh"
+
+require_bins jq
 
 REUSE=0
 if [ "${1:-}" = "--reuse" ]; then
@@ -19,8 +22,7 @@ CONFIG_PATH="${1:-./config.json}"
 mkdir -p "$(dirname "$CONFIG_PATH")"
 
 if [ "$REUSE" = "1" ] && [ ! -f "$CONFIG_PATH" ]; then
-    echo "ERROR: --reuse passed but $CONFIG_PATH does not exist" >&2
-    exit 1
+    die "--reuse passed but $CONFIG_PATH does not exist"
 fi
 
 if [ -f "$CONFIG_PATH" ] && [ "$REUSE" = "0" ]; then
@@ -33,13 +35,11 @@ if [ -f "$CONFIG_PATH" ] && [ "$REUSE" = "0" ]; then
 fi
 
 if [ "$REUSE" = "1" ]; then
-    # Validate JSON, print summary, exit
-    if ! jq -e . "$CONFIG_PATH" >/dev/null 2>&1; then
-        echo "ERROR: $CONFIG_PATH is not valid JSON" >&2
-        exit 1
-    fi
+    # Full schema validation via lib.sh — exits with clear error on bad fields.
+    load_config "$CONFIG_PATH"
     echo "Using existing config: $CONFIG_PATH"
-    jq -r '"  remote=\(.remote.host // "(local)")  container=\(.remote.container // "openclaw")\n  owner=\(.owner.name) tg=\(.owner.telegramId)  tz=\(.owner.timezone)  lang=\(.owner.language)\n  bot=\(.bot.name)  heartbeat=\(.limits.heartbeatEvery // "6h")"' "$CONFIG_PATH"
+    printf '  remote=%s  container=%s\n  owner=%s tg=%s  tz=%s  lang=%s\n  bot=%s  heartbeat=%s\n' \
+        "${REMOTE:-(local)}" "$CONTAINER" "$OWNER_NAME" "$OWNER_TG" "$TIMEZONE" "$LANGUAGE" "$BOT_NAME" "$HEARTBEAT_EVERY"
     exit 0
 fi
 
@@ -62,37 +62,36 @@ prompt_required() {
     done
 }
 
-REMOTE=$(prompt          "SSH target (user@host, leave empty for local install)" "")
-CONTAINER=$(prompt       "Container name" "openclaw")
-OWNER_NAME=$(prompt_required "Owner first name (display only)")
-OWNER_TG_ID=$(prompt_required "Owner Telegram ID (numeric — see @userinfobot)")
-TIMEZONE=$(prompt        "Timezone (IANA, e.g. Europe/Berlin)" "UTC")
-LANGUAGE=$(prompt        "Reply language (e.g. en, ru, de)" "en")
-BOT_NAME=$(prompt_required "Bot name (in-character)")
-BOT_EMOJI=$(prompt       "Bot emoji" "🤖")
-CHARACTER_BLURB=$(prompt "Bot character — one line" "Pragmatic, concise, helpful.")
-QUIET_HOURS=$(prompt     "Quiet hours (no proactive messages)" "01:00-07:00")
-HEARTBEAT_EVERY=$(prompt "Heartbeat interval (cron-style, e.g. 6h, 4h, 30m)" "6h")
+REMOTE_IN=$(prompt          "SSH target (user@host, leave empty for local install)" "")
+CONTAINER_IN=$(prompt       "Container name" "openclaw")
+OWNER_NAME_IN=$(prompt_required "Owner first name (display only)")
+OWNER_TG_IN=$(prompt_required "Owner Telegram ID (numeric — see @userinfobot)")
+TIMEZONE_IN=$(prompt        "Timezone (IANA, e.g. Europe/Berlin)" "UTC")
+LANGUAGE_IN=$(prompt        "Reply language (e.g. en, ru, de)" "en")
+BOT_NAME_IN=$(prompt_required "Bot name (in-character)")
+BOT_EMOJI_IN=$(prompt       "Bot emoji" "🤖")
+CHARACTER_BLURB_IN=$(prompt "Bot character — one line" "Pragmatic, concise, helpful.")
+QUIET_HOURS_IN=$(prompt     "Quiet hours (no proactive messages)" "01:00-07:00")
+HEARTBEAT_EVERY_IN=$(prompt "Heartbeat interval (e.g. 6h, 4h, 30m)" "6h")
 
-# Validate Telegram ID is numeric
-if ! [[ "$OWNER_TG_ID" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: Telegram ID must be numeric, got: $OWNER_TG_ID" >&2
-    exit 1
-fi
+# Validate everything before writing the file.
+validate_ssh_target     "$REMOTE_IN"
+validate_container_name "$CONTAINER_IN"
+validate_telegram_id    "$OWNER_TG_IN"
+validate_heartbeat      "$HEARTBEAT_EVERY_IN"
 
-# Build JSON via jq for safety (handles quoting in character blurb etc.)
 jq -n \
-    --arg remote "$REMOTE" \
-    --arg container "$CONTAINER" \
-    --arg owner_name "$OWNER_NAME" \
-    --argjson owner_tg "$OWNER_TG_ID" \
-    --arg timezone "$TIMEZONE" \
-    --arg language "$LANGUAGE" \
-    --arg bot_name "$BOT_NAME" \
-    --arg bot_emoji "$BOT_EMOJI" \
-    --arg character_blurb "$CHARACTER_BLURB" \
-    --arg quiet_hours "$QUIET_HOURS" \
-    --arg heartbeat "$HEARTBEAT_EVERY" \
+    --arg remote "$REMOTE_IN" \
+    --arg container "$CONTAINER_IN" \
+    --arg owner_name "$OWNER_NAME_IN" \
+    --argjson owner_tg "$OWNER_TG_IN" \
+    --arg timezone "$TIMEZONE_IN" \
+    --arg language "$LANGUAGE_IN" \
+    --arg bot_name "$BOT_NAME_IN" \
+    --arg bot_emoji "$BOT_EMOJI_IN" \
+    --arg character_blurb "$CHARACTER_BLURB_IN" \
+    --arg quiet_hours "$QUIET_HOURS_IN" \
+    --arg heartbeat "$HEARTBEAT_EVERY_IN" \
     '{
         remote:   { host: $remote, container: $container },
         owner:    { name: $owner_name, telegramId: $owner_tg, timezone: $timezone, language: $language, quietHours: $quiet_hours },
