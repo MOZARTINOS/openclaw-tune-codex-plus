@@ -26,18 +26,27 @@ fi
 
 echo "[rollback] restoring from $BACKUP_DIR"
 # Restore everything deploy.sh writes: openclaw.json, workspace, .codex, harness-auth, acp-auth.
+# Restore chain is fail-closed (set -e). chown is a separate per-path loop that tolerates
+# missing optional paths without masking restore failures.
 ssh_exec "set -e; \
-    cp -- $BACKUP_DIR_Q/openclaw.json /root/.openclaw/openclaw.json && \
-    rm -rf /root/.openclaw/workspace && cp -a -- $BACKUP_DIR_Q/workspace /root/.openclaw/workspace && \
-    rm -rf /root/.openclaw/.codex && cp -a -- $BACKUP_DIR_Q/.codex /root/.openclaw/.codex && \
+    cp -- $BACKUP_DIR_Q/openclaw.json /root/.openclaw/openclaw.json; \
+    rm -rf /root/.openclaw/workspace && cp -a -- $BACKUP_DIR_Q/workspace /root/.openclaw/workspace; \
+    rm -rf /root/.openclaw/.codex && cp -a -- $BACKUP_DIR_Q/.codex /root/.openclaw/.codex; \
     if [ -d $BACKUP_DIR_Q/harness-auth ]; then \
         rm -rf /root/.openclaw/agents/main/agent/harness-auth && \
-        cp -a -- $BACKUP_DIR_Q/harness-auth /root/.openclaw/agents/main/agent/harness-auth; fi && \
+        cp -a -- $BACKUP_DIR_Q/harness-auth /root/.openclaw/agents/main/agent/harness-auth; \
+    fi; \
     if [ -d $BACKUP_DIR_Q/acp-auth ]; then \
         rm -rf /root/.openclaw/agents/main/agent/acp-auth && \
-        cp -a -- $BACKUP_DIR_Q/acp-auth /root/.openclaw/agents/main/agent/acp-auth; fi && \
-    chown -R 1000:1000 /root/.openclaw/openclaw.json /root/.openclaw/workspace /root/.openclaw/.codex \
-        /root/.openclaw/agents/main/agent/harness-auth /root/.openclaw/agents/main/agent/acp-auth 2>/dev/null || true"
+        cp -a -- $BACKUP_DIR_Q/acp-auth /root/.openclaw/agents/main/agent/acp-auth; \
+    fi; \
+    for p in /root/.openclaw/openclaw.json \
+             /root/.openclaw/workspace \
+             /root/.openclaw/.codex \
+             /root/.openclaw/agents/main/agent/harness-auth \
+             /root/.openclaw/agents/main/agent/acp-auth; do \
+        [ -e \"\$p\" ] && chown -R 1000:1000 \"\$p\"; \
+    done"
 
 echo "[rollback] restarting container"
 ssh_exec "docker restart $CONTAINER_Q >/dev/null"

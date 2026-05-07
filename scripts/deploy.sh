@@ -55,16 +55,19 @@ ssh_exec "set -e; \
     chown 1000:1000 /root/.openclaw/workspace/scripts/chatgpt_limits.js"
 
 echo "[deploy] writing codex-config.toml to all account dirs (.codex + harness-auth + acp-auth)"
-# Do the loop entirely on the remote side — no IFS-fragile $ACCT_DIRS.
-# CONFIG_SRC is a single fixed path on the remote; pass it via env to the inner sh.
+# Loop runs entirely on the remote — IFS-safe + tolerates missing harness/acp paths
+# (which happens on fresh installs where Codex CLI hasn't been logged in yet).
 ssh_exec "set -e; \
     CONFIG_SRC=$REMOTE_TMP_Q/extract/codex-config.toml; \
-    cp -- \"\$CONFIG_SRC\" /root/.openclaw/.codex/config.toml && \
+    cp -- \"\$CONFIG_SRC\" /root/.openclaw/.codex/config.toml; \
     chown 1000:1000 /root/.openclaw/.codex/config.toml; \
-    find /root/.openclaw/agents/main/agent/harness-auth/codex \
-         /root/.openclaw/agents/main/agent/acp-auth/codex \
-         -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
-        -exec sh -c 'cp -- \"\$1\" \"\$2/config.toml\" && chown 1000:1000 \"\$2/config.toml\"' sh \"\$CONFIG_SRC\" {} \\;"
+    for base in /root/.openclaw/agents/main/agent/harness-auth/codex \
+                /root/.openclaw/agents/main/agent/acp-auth/codex; do \
+        [ -d \"\$base\" ] || continue; \
+        find \"\$base\" -mindepth 1 -maxdepth 1 -type d \
+            -exec sh -c 'cp -- \"\$1\" \"\$2/config.toml\" && chown 1000:1000 \"\$2/config.toml\"' \
+            sh \"\$CONFIG_SRC\" {} \\;; \
+    done"
 
 echo "[deploy] patching openclaw.json (atomic via .new + mv)"
 LOCAL_PATCHED=$(mktemp -t openclaw-json.XXXXXX)
