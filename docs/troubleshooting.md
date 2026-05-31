@@ -84,3 +84,13 @@ This is the primary hitting the weekly Plus/Codex cap — not a bug. The bot is 
 ## Scripts must run under bash, not POSIX sh
 
 Every script uses `set -o pipefail` and other bash-only constructs. Running them with `sh script.sh` fails where `/bin/sh` is dash/ash. Always invoke via `./script.sh` (shebang is `#!/usr/bin/env bash`) or `bash script.sh`.
+
+## `missing local dependency: jq` / `docker: command not found` / `config.json not found`
+
+You're running the tuner from the wrong place — almost always from **inside the OpenClaw container**. These scripts run from your **admin machine or the Docker host**, not from inside the bot's container.
+
+- Install the local deps where you run it: `jq`, `node`, `ssh`, `scp` (plus `docker` for local mode).
+- Create the config first: `./install.sh` (interactive) or `cp config.example.json config.json`, then edit it.
+- To target a remote bot, set `remote.host` in `config.json`; leave it empty only when you're already on the Docker host.
+
+Note: `verify.sh` reads the live config over `docker exec` (directly or via SSH), so it must run somewhere that can reach Docker — running it inside the sandboxed container itself will fail on all three counts above.

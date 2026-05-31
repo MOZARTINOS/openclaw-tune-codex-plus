@@ -43,6 +43,15 @@ cd openclaw-tune-codex-plus
 
 The installer asks you 7 questions (SSH target, owner Telegram ID, timezone, bot name, …), saves your answers, then patches the remote bot. Re-running re-uses the saved answers — no prompts.
 
+### Where to run it
+
+Run the tuner from **your own machine or the Docker host** — whichever has `jq`, `node`, `ssh` and can reach the bot. **Do not run it from inside the OpenClaw container** (it has none of those, and no `config.json`).
+
+- **Remote bot:** set `remote.host` in `config.json` (e.g. `root@your.server`) — the scripts SSH in to the host and run `docker exec` there.
+- **Already on the Docker host:** leave `remote.host` empty (local mode) — the scripts call `docker exec` directly, so `docker` must be on your `PATH`.
+
+You also need a `config.json` first — `./install.sh` creates one interactively, or `cp config.example.json config.json` and edit it. (`config.json` is gitignored on purpose; it holds your SSH target and Telegram ID.)
+
 ## Security model — read this before running
 
 This tuner installs Codex CLI configs with **`sandbox_mode = "danger-full-access"`** and **`approval_policy = "never"`**. That's required because Codex CLI's `workspace-write` mode uses bwrap (Linux user namespaces), which fails inside non-privileged Docker. The trade-off: **whatever your bot can be talked into doing, it can do** — read any file inside the container, run any shell command, hit any host network reachable from the container.
