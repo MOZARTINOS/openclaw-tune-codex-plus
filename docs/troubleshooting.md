@@ -69,3 +69,18 @@ ssh root@host "ls -1d /root/openclaw-tune-backup-* | head -n -3 | xargs rm -rf"
 ```
 
 (Keeps the 3 most recent.)
+
+## OAuth token dies after ~10 days (and `auth.json` isn't the only copy)
+
+Codex OAuth access tokens are short-lived (~10 days) and depend on silent refresh. Two things bite:
+
+- **Stale auth in more than one place.** The live token is `/home/node/.openclaw/.codex/auth.json`, but copies also live under the agent's `harness-auth/` and `acp-auth/` dirs. If `access_token` works but `id_token` is stale/expired, sync the copies so they match before debugging anything else.
+- **Refresh needs Codex CLI ≥ 0.124.0.** Older builds don't persist the rotated `refresh_token` after a silent refresh, so OAuth dies after ~10 days. On ≥ 0.124.0, run the refresh on a weekly cron so the token never ages out.
+
+## "ChatGPT usage limit (plus plan) — try again in ~N min"
+
+This is the primary hitting the weekly Plus/Codex cap — not a bug. The bot is expected to fall back to the secondary (Gemini) for the cooldown window, then return to Codex automatically after the reset. Real cooldowns seen on the reference bot ranged from ~72 min to ~1795 min. If you hit lockouts *frequently*, your idle/heartbeat load is too high — confirm `heartbeat.every = "6h"` with `verify.sh`.
+
+## Scripts must run under bash, not POSIX sh
+
+Every script uses `set -o pipefail` and other bash-only constructs. Running them with `sh script.sh` fails where `/bin/sh` is dash/ash. Always invoke via `./script.sh` (shebang is `#!/usr/bin/env bash`) or `bash script.sh`.

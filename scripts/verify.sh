@@ -74,6 +74,37 @@ if echo ",$ALLOWLIST," | grep -q ",$OWNER_TG,"; then ok "owner $OWNER_TG in allo
 else fail "owner $OWNER_TG NOT in channels.telegram.allowFrom — bot will ignore your DMs"
 fi
 
+echo "[verify] heartbeat throttled to 6h"
+HB=$(ssh_exec "jq -r '.agents.defaults.heartbeat.every // \"\"' /root/.openclaw/openclaw.json" 2>/dev/null || echo "")
+if [ "$HB" = "6h" ]; then ok "heartbeat.every=6h"
+else fail "heartbeat.every='$HB' (expected 6h) — idle ticks will drain quota"
+fi
+
+echo "[verify] Telegram surface locked down"
+DM=$(ssh_exec "jq -r '.channels.telegram.dmPolicy // \"\"' /root/.openclaw/openclaw.json" 2>/dev/null || echo "")
+GP=$(ssh_exec "jq -r '.channels.telegram.groupPolicy // \"\"' /root/.openclaw/openclaw.json" 2>/dev/null || echo "")
+if [ "$DM" = "allowlist" ]; then ok "dmPolicy=allowlist"; else fail "dmPolicy='$DM' (expected allowlist)"; fi
+if [ "$GP" = "disabled" ];  then ok "groupPolicy=disabled"; else fail "groupPolicy='$GP' (expected disabled)"; fi
+
+echo "[verify] high-blast-radius tools denied"
+DENY=$(ssh_exec "jq -r '.tools.deny // [] | join(\",\")' /root/.openclaw/openclaw.json" 2>/dev/null || echo "")
+for t in image image_generate code_execution browser x_search; do
+    if echo ",$DENY," | grep -q ",$t,"; then ok "tools.deny has '$t'"
+    else fail "tools.deny missing '$t'"
+    fi
+done
+
+echo "[verify] no paid model in the fallback chain"
+FB=$(ssh_exec "jq -r '.agents.defaults.model.fallbacks // [] | join(\",\")' /root/.openclaw/openclaw.json" 2>/dev/null || echo "")
+if echo ",$FB," | grep -qE ',(anthropic/|openai/gpt-4o-mini)'; then
+    fail "paid/blocked model in fallbacks: $FB"
+else ok "fallbacks clean ($FB)"
+fi
+
+echo "[verify] anthropic provider removed"
+ANTH=$(ssh_exec "jq -r 'if .models.providers.anthropic then \"present\" else \"absent\" end' /root/.openclaw/openclaw.json" 2>/dev/null || echo "absent")
+if [ "$ANTH" = "absent" ]; then ok "no anthropic provider"; else fail "models.providers.anthropic still present"; fi
+
 echo
 if [ "$FAILED" = "1" ]; then
     echo "VERIFY FAILED — check items marked ✗ above. Consider rollback.sh." >&2
