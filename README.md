@@ -31,12 +31,12 @@ Out of the box, an OpenClaw bot on ChatGPT Plus burns through the weekly Codex q
 
 ## Status
 
-Pre-release. Tested on one production bot (OpenClaw `2026.4.23`, Codex CLI `0.124.0`). Public release after a friend-test cycle.
+Public. Tested on a production bot (OpenClaw `2026.4.23`, Codex CLI `0.124.0`). Issues and PRs welcome.
 
 ## Quick start
 
 ```bash
-git clone <repo-url> openclaw-tune-codex-plus
+git clone https://github.com/MOZARTINOS/openclaw-tune-codex-plus.git
 cd openclaw-tune-codex-plus
 ./install.sh
 ```

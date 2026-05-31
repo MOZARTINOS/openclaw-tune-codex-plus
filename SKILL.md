@@ -85,7 +85,7 @@ Restores `openclaw.json` + `workspace/` + `.codex/` + `harness-auth/` + `acp-aut
 
 ## Reference deployment
 
-The recipe was developed on a real production bot. See [Niklas's bot](https://github.com/MOZARTINOS/clawd-bot) for an example of what a tuned `openclaw.json` and trimmed `workspace/*.md` look like in practice.
+The recipe was developed and validated against a real production OpenClaw bot. The `templates/` directory and `config.example.json` show what a tuned `openclaw.json` and trimmed `workspace/*.md` look like in practice.
 
 ## Troubleshooting
 
