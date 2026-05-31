@@ -1,5 +1,7 @@
 # openclaw-tune-codex-plus
 
+![openclaw-tune-codex-plus — a default OpenClaw bot burning through its Codex quota vs. the same bot tuned to run all week on $20](docs/hero.png)
+
 > Make your OpenClaw Telegram bot fit on the $20 ChatGPT Plus Codex budget.
 
 A one-command tuner that trims an OpenClaw bot's system-prompt budget, pins the Codex CLI to subscription mode, and removes the paid-per-token fallbacks that quietly drain your wallet.
